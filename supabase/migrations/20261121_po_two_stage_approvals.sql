@@ -29,7 +29,11 @@ create policy po_approval_steps_read on public.po_approval_steps for select to a
  and public.can_access_hotel(po_approval_steps.hotel_id));
 
 -- Protect PO writes from direct client modifications; RPCs run as their owner.
-revoke insert,update,delete on public.purchase_orders from anon,authenticated;
+revoke all on public.purchase_orders from anon,authenticated;
+grant select on public.purchase_orders to authenticated;
+-- Audit log must not be directly writable or truncatable by API roles.
+revoke all on public.audit_events from anon,authenticated;
+grant select on public.audit_events to authenticated;
 
 create or replace function public.create_po_draft(
  p_project_id uuid,p_supplier_id uuid,p_description text,p_amount numeric
@@ -56,7 +60,6 @@ begin
  if not found then raise exception 'Active supplier not found in this organisation'; end if;
  if nullif(btrim(p_description),'') is null or p_amount is null or p_amount<=0
  then raise exception 'Description and positive amount are required'; end if;
- if v_project.status in ('completed','cancelled') then raise exception 'Project is closed'; end if;
  v_id:=gen_random_uuid();
  v_number:='PO-'||upper(substr(replace(v_id::text,'-',''),1,16));
  insert into public.purchase_orders( id,organisation_id,hotel_id,project_id,supplier_id,
